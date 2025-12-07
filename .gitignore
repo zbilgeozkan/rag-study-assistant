@@ -1,0 +1,18 @@
+# Python venv
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Env files
+.env
+
+# Data artifacts (optional – keep local only)
+data/chunks.json
+data/faiss_index.bin
+data/faiss_metadata.json
+
+# VS Code
+.vscode/
