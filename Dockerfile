@@ -1,28 +1,32 @@
-# Hafif Python imajı
+# Lightweight Python image
 FROM python:3.12-slim
 
-# Ortam ayarları (loglar düzgün görünsün, pyc yazmasın)
+# Environment settings
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# FAISS / numpy vs. için gerekli temel paketler
+# Install build tools (for faiss, numpy etc.)
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Çalışma dizini
+# Workdir
 WORKDIR /app
 
-# Python bağımlılıkları
+# Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# Proje dosyaları
-COPY . .
+# Copy project files
+COPY rag ./rag
+COPY src ./src
+COPY frontend ./frontend
+COPY data ./data
+COPY README.md .
 
-# Cloud Run genelde 8080 portunu kullanır
+# Cloud Run will set PORT → default 8080
 ENV PORT=8080
 
-# Uygulamayı başlat
-CMD ["uvicorn", "rag.app:app", "--host", "0.0.0.0", "--port", "8080"]
+# Start FastAPI with uvicorn
+CMD ["sh", "-c", "uvicorn rag.app:app --host 0.0.0.0 --port ${PORT}"]

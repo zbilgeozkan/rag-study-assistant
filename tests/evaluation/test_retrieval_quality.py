@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
-from embed_faiss import retrieve_top_k  # my retrieval function (e.g.: query → top k chunks)
+from embed_faiss import retrieve_top_k  # retrieval function (e.g.: query → top k chunks)
 
 K = 3  # how many top-k passages to return
 

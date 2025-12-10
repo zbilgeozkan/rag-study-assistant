@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RAG Personal Study Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #f4f4f5;
+      --card-bg: #ffffff;
+      --border: #e4e4e7;
+      --border-strong: #d4d4d8;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --danger: #b91c1c;
+      --radius-lg: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: 100%;
+      max-width: 980px;
+      max-height: 95vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .header {
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 16px 18px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .app-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .app-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .header-right {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.1fr 1.1fr;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 12px;
+      }
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      border-radius: 10px;
+      border: 1px solid var(--border-strong);
+      padding: 8px 10px;
+      resize: vertical;
+      background: #fefefe;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+      background: #ffffff;
+    }
+
+    .controls-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .topk-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .topk-group input[type="number"] {
+      width: 52px;
+      border-radius: 6px;
+      border: 1px solid var(--border-strong);
+      padding: 4px 6px;
+      background: #f9fafb;
+      font-size: 13px;
+      outline: none;
+    }
+
+    button.primary {
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button.primary:disabled {
+      opacity: 0.7;
+      cursor: default;
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+      min-height: 18px;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .answer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .answer-label {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .time-pill {
+      font-size: 11px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      border: 1px solid var(--border-strong);
+      color: var(--muted);
+    }
+
+    .answer-block {
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .placeholder {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .passages {
+      margin-top: 10px;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+
+    .passage-card {
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 8px 9px;
+      font-size: 12px;
+      background: #f9fafb;
+      margin-bottom: 6px;
+    }
+
+    .passage-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .meta-left {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .meta-tag {
+      border-radius: 999px;
+      padding: 1px 7px;
+      border: 1px solid var(--border-strong);
+      background: #ffffff;
+    }
+
+    .meta-score {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="header">
+      <div class="header-left">
+        <div class="app-title">RAG Personal Study Assistant</div>
+        <div class="app-subtitle">
+          Ask questions and get answers based on your indexed manual and documents.
+        </div>
+      </div>
+      <div class="header-right">
+        <div>Backend: Cloud Run</div>
+        <div style="font-size: 11px; color: #9ca3af;">Endpoint: <code>/ask</code></div>
+      </div>
+    </header>
+
+    <section class="layout">
+      <!-- LEFT: INPUT -->
+      <section class="panel">
+        <h2 class="section-title">Question</h2>
+        <label for="question">Write your question in English.</label>
+        <textarea
+          id="question"
+          placeholder="Example: How should I correctly wear and adjust the VR headset?"
+        ></textarea>
+
+        <div class="controls-row">
+          <div class="topk-group">
+            <span>Number of passages:</span>
+            <input type="number" id="topk" min="1" max="10" value="5" />
+          </div>
+          <button class="primary" id="askBtn">
+            <span id="btnLabel">Send</span>
+            <span id="btnSpinner" style="display:none;">...</span>
+          </button>
+        </div>
+
+        <div class="status" id="status">
+          <span id="statusText">Ready</span>
+        </div>
+      </section>
+
+      <!-- RIGHT: OUTPUT -->
+      <section class="panel">
+        <h2 class="section-title">Answer</h2>
+        <div id="answerContainer">
+          <p class="placeholder">
+            After sending a question, the answer and the related document passages will appear here.
+          </p>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const API_URL = "https://rag-service-55okahbpha-ew.a.run.app/ask";
+
+    const questionEl = document.getElementById("question");
+    const topkEl = document.getElementById("topk");
+    const askBtn = document.getElementById("askBtn");
+    const btnLabel = document.getElementById("btnLabel");
+    const btnSpinner = document.getElementById("btnSpinner");
+    const statusEl = document.getElementById("status");
+    const statusTextEl = document.getElementById("statusText");
+    const answerContainer = document.getElementById("answerContainer");
+
+    function setLoading(isLoading, msg) {
+      askBtn.disabled = isLoading;
+      btnSpinner.style.display = isLoading ? "inline-block" : "none";
+      btnLabel.textContent = isLoading ? "Working..." : "Send";
+      statusEl.classList.remove("error");
+      statusTextEl.textContent = msg || (isLoading ? "Sending request..." : "Ready");
+    }
+
+    function setError(msg) {
+      statusEl.classList.add("error");
+      statusTextEl.textContent = msg;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function renderAnswer(data) {
+      if (!data || !data.answer) {
+        answerContainer.innerHTML =
+          '<p class="placeholder">No answer received from the API.</p>';
+        return;
+      }
+
+      const passages = data.passages || [];
+      const answerMarkdown = data.answer || "";
+      const answerHtml = marked.parse(answerMarkdown); // markdown → HTML
+
+      const passagesHtml = passages
+        .map((p, i) => {
+          const score =
+            typeof p.distance === "number" ? p.distance.toFixed(3) : "–";
+
+          const source = p.source || "document";
+          const title =
+            p.title && p.title !== "Unknown" ? p.title : null;
+          const page =
+            p.page != null ? `Page/Slide ${p.page}` : null;
+
+          return `
+            <article class="passage-card">
+              <div class="passage-meta">
+                <div class="meta-left">
+                  <span class="meta-tag">#${i + 1}</span>
+                  <span>${escapeHtml(source)}</span>
+                  ${
+                    title
+                      ? `<span>· ${escapeHtml(title)}</span>`
+                      : ""
+                  }
+                  ${
+                    page
+                      ? `<span>· ${escapeHtml(page)}</span>`
+                      : ""
+                  }
+                </div>
+                <span class="meta-score">${score}</span>
+              </div>
+              <div>${escapeHtml(p.text || "")}</div>
+            </article>
+          `;
+        })
+        .join("");
+
+      const html = `
+        <div class="answer-header">
+          <span class="time-pill">
+            ${data.time != null ? `Response time: ${data.time.toFixed(2)}s` : ""}
+          </span>
+        </div>
+
+        <div class="answer-block">
+          ${answerHtml}
+        </div>
+
+        <div class="passages">
+          <div class="answer-header">
+            <span class="answer-label">Related passages (${passages.length})</span>
+          </div>
+          ${passagesHtml}
+        </div>
+      `;
+
+      answerContainer.innerHTML = html;
+    }
+
+    async function handleAsk() {
+      const question = questionEl.value.trim();
+      const top_k = parseInt(topkEl.value, 10) || 5;
+
+      if (!question) {
+        setError("Please enter a question first.");
+        return;
+      }
+
+      setLoading(true, "Sending request to the service...");
+
+      try {
+        const resp = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ question, top_k }),
+        });
+
+        if (!resp.ok) {
+          let message = `API error: ${resp.status}`;
+          try {
+            const errJson = await resp.json();
+            if (errJson.detail) {
+              message += ` · ${errJson.detail}`;
+            }
+          } catch (_) {}
+          setError(message);
+          return;
+        }
+
+        const data = await resp.json();
+        setLoading(false, "Answer received.");
+        renderAnswer(data);
+      } catch (err) {
+        console.error(err);
+        setError("Network error while talking to the service.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    askBtn.addEventListener("click", handleAsk);
+    questionEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        handleAsk();
+      }
+    });
+  </script>
+
+  <!-- Markdown parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</body>
+</html>

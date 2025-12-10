@@ -1,49 +1,76 @@
 import json
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+import os
+import google.generativeai as genai
+
+# ===============================
+# Gemini setup
+# ===============================
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise RuntimeError("ERROR: GEMINI_API_KEY missing!")
+
+genai.configure(api_key=GEMINI_API_KEY)
+
+EMBED_MODEL = "models/text-embedding-004"
+
 
 class FAISSQuery:
-    def __init__(self, index_path="data/faiss_index.bin", metadata_path="data/faiss_metadata.json", model_name='all-MiniLM-L6-v2'):
-        # Load FAISS index
+    def __init__(self, index_path="data/faiss_index.bin", metadata_path="data/faiss_metadata.json"):
+        # Load FAISS
         self.index = faiss.read_index(index_path)
 
-        # Load chunks metadata
+        # Load metadata
         with open(metadata_path, "r", encoding="utf-8") as f:
             self.metadata = json.load(f)
 
-        # Initialize embedding model
-        self.model = SentenceTransformer(model_name)
+    # --------------------------
+    # Gemini query embedding
+    # --------------------------
+    def embed_query(self, text: str) -> np.ndarray:
+        """Generate embedding using Gemini (must match index embeddings)."""
 
-    def query(self, text, top_k=5):
-        # Embed query text
-        query_vec = self.model.encode([text], convert_to_numpy=True)
+        response = genai.embed_content(
+            model=EMBED_MODEL,
+            content=text,
+            task_type="retrieval_query"
+        )
 
-        # Search in FAISS index
-        distances, indices = self.index.search(query_vec, top_k)
+        embedding = np.array(response["embedding"], dtype=np.float32)
+        return embedding.reshape(1, -1)
 
-        # Return matched chunks with metadata
+    # --------------------------
+    # FAISS retrieval
+    # --------------------------
+    def query(self, text: str, top_k: int = 5):
+        # Embed query
+        vec = self.embed_query(text)
+
+        # Search FAISS
+        distances, indices = self.index.search(vec, top_k)
+
         results = []
         for idx, dist in zip(indices[0], distances[0]):
             if idx < 0 or idx >= len(self.metadata):
-                continue  # IndexError Fix
-            chunk_meta = self.metadata[idx]
+                continue
+
+            m = self.metadata[idx]
             results.append({
-                "text": chunk_meta.get("text", ""),
-                "source": chunk_meta.get("source", ""),
-                "page": chunk_meta.get("page", 0),
-                "title": chunk_meta.get("title", "Unknown"),
+                "text": m["text"],
+                "source": m["source"],
+                "page": m["page"],
+                "title": m["title"],
                 "distance": float(dist)
             })
+
         return results
 
-# Test
+
+# Optional test
 if __name__ == "__main__":
-    faiss_query = FAISSQuery()
-    results = faiss_query.query("How do I wear the Gear VR headset?", top_k=5)
-    
-    # Save in JSON file
-    output_path = "data/query_result.json"
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    print(f"Results saved to {output_path}")
+    q = FAISSQuery()
+    out = q.query("What is virtualization?", top_k=5)
+    with open("data/query_test.json", "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=2, ensure_ascii=False)
+    print("Saved to data/query_test.json")

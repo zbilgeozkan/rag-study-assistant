@@ -2,90 +2,128 @@ import os
 import json
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
-import torch
+import google.generativeai as genai
 
-# Automatic device selection
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Using device: {device}")
+from rag.gcs_utils import upload_file_to_gcs
 
-# Load chunks
-with open("data/chunks.json", "r", encoding="utf-8") as f:
-    chunks = json.load(f)
 
-# Extract texts and metadata
-texts = [c['text'] for c in chunks]
+# =============================================
+# 1) Configure Gemini API
+# =============================================
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY is missing in environment!")
 
-# Initialize embedding model
-model = SentenceTransformer('all-MiniLM-L6-v2', device=device) # fast and small model
+genai.configure(api_key=GEMINI_API_KEY)
 
-# Check if embeddings already exist
-embeddings_path = "data/embeddings.npy"
-if os.path.exists(embeddings_path):
-    embeddings = np.load(embeddings_path)
-    print("Embeddings loaded from cache.")
-else:
-    # Embed texts in batches
-    embeddings = model.encode(
-        texts,
-        show_progress_bar=True,
-        convert_to_numpy=True,
-        batch_size=64  # Batch size: can be increased depending on hardware
-    )
+EMBED_MODEL = "models/text-embedding-004"  # Latest + Best for embeddings
+
+
+# =============================================
+# Helper functions
+# =============================================
+def load_chunks(chunks_path="data/chunks.json"):
+    with open(chunks_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def build_or_load_embeddings(texts, embeddings_path="data/embeddings.npy"):
+    if os.path.exists(embeddings_path):
+        print("Embeddings found. Loading from cache...")
+        arr = np.load(embeddings_path)
+        print(f"Loaded embeddings with shape: {arr.shape}")
+        return arr
+
+    print("No cached embeddings found. Computing embeddings with Gemini (ONE BY ONE)...")
+
+    embeddings = []
+
+    for i, text in enumerate(texts):
+        response = genai.embed_content(
+            model=EMBED_MODEL,
+            content=text,
+            task_type="retrieval_document",
+        )
+
+        if "embedding" not in response:
+            raise RuntimeError(f"Missing embedding in response: {response}")
+
+        emb = np.array(response["embedding"], dtype="float32")
+
+        # Check dimension consistency
+        if i == 0:
+            expected_dim = emb.shape[0]
+            print(f"Embedding dimension: {expected_dim}")
+        else:
+            if emb.shape[0] != expected_dim:
+                raise RuntimeError(
+                    f"Dimension mismatch at index {i}: got {emb.shape[0]}, expected {expected_dim}"
+                )
+
+        embeddings.append(emb)
+
+        if i % 20 == 0:
+            print(f"Embedded {i}/{len(texts)}")
+
+    embeddings = np.vstack(embeddings)
     np.save(embeddings_path, embeddings)
-    print("Embeddings computed and saved to cache.")
 
-# Create FAISS index
-dim = embeddings.shape[1]
-index = faiss.IndexFlatL2(dim)  # L2 distance
-index.add(embeddings)
-
-print(f"Index built with {index.ntotal} vectors.")
-
-# Save the index
-faiss_index_path = "data/faiss_index.bin"
-faiss.write_index(index, faiss_index_path)
-
-print(f"Index saved to {faiss_index_path}")
-
-# Save metadata
-metadata = [
-    {
-        "id": c["id"],
-        "text": c["text"],
-        "source": c["source"],
-        "page": c["page"],
-        "title": c.get("title", "Unknown")
-    }
-    for c in chunks
-]
-
-with open("data/faiss_metadata.json", "w", encoding="utf-8") as f:
-    json.dump(metadata, f, ensure_ascii=False, indent=2)
-
-print("Metadata saved to data/faiss_metadata.json")
-
-# Retrieval Function for Evaluation
-def load_faiss_index(index_path="data/faiss_index.bin", metadata_path="data/faiss_metadata.json"):
-    """Load FAISS index and metadata."""
-    index = faiss.read_index(index_path)
-    with open(metadata_path, "r", encoding="utf-8") as f:
-        metadata = json.load(f)
-    return index, metadata
+    print(f"Embeddings saved to {embeddings_path} with shape: {embeddings.shape}")
+    return embeddings
 
 
-def retrieve_top_k(query, k=3, index_path="data/faiss_index.bin", metadata_path="data/faiss_metadata.json"):
-    """Retrieve top-k most similar passages for a given query, with scores."""
-    index, metadata = load_faiss_index(index_path, metadata_path)
+def build_faiss_index(embeddings, index_path="data/faiss_index.bin"):
+    dim = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dim)
+    index.add(embeddings)
 
-    query_embedding = model.encode([query], convert_to_numpy=True)
-    distances, indices = index.search(query_embedding, k)
+    print(f"FAISS index built with {index.ntotal} vectors.")
+    faiss.write_index(index, index_path)
+    print(f"FAISS index saved to {index_path}")
 
-    results = []
-    for score, idx in zip(distances[0], indices[0]):
-        if 0 <= idx < len(metadata):
-            results.append({
-                "text": metadata[idx]["text"],
-                "score": float(score)  # FAISS distance (smaller the better)
-            })
-    return results
+    return index
+
+
+def save_metadata(chunks, metadata_path="data/faiss_metadata.json"):
+    metadata = [
+        {
+            "id": c["id"],
+            "text": c["text"],
+            "source": c["source"],
+            "page": c["page"],
+            "title": c.get("title", "Unknown"),
+        }
+        for c in chunks
+    ]
+
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+    print(f"Metadata saved to {metadata_path}")
+
+
+# =============================================
+# Main pipeline
+# =============================================
+def main():
+    chunks = load_chunks()
+    texts = [c["text"] for c in chunks]
+    print(f"Loaded {len(texts)} chunks.")
+
+    embeddings = build_or_load_embeddings(texts)
+
+    build_faiss_index(embeddings)
+    save_metadata(chunks)
+
+    bucket_name = os.getenv("GCS_BUCKET_NAME", "rag-documents-bucket-icu")
+
+    upload_file_to_gcs("data/faiss_index.bin", "faiss/faiss_index.bin", bucket_name)
+    upload_file_to_gcs("data/faiss_metadata.json", "faiss/faiss_metadata.json", bucket_name)
+    upload_file_to_gcs("data/chunks.json", "faiss/chunks.json", bucket_name)
+    upload_file_to_gcs("data/embeddings.npy", "faiss/embeddings.npy", bucket_name)
+
+    print("All FAISS files uploaded to GCS.")
+
+
+if __name__ == "__main__":
+    main()

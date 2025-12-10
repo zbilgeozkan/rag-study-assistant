@@ -5,6 +5,7 @@ scikit-learn>=1.7.1
 sentence-transformers>=5.1.0
 faiss-cpu>=1.12.0       # Use faiss-gpu if you want GPU indexing
 google-generativeai
+google-cloud-storage
 
 # File handling
 PyPDF2>=3.0.1

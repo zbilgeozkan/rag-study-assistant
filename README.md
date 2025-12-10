@@ -1,60 +1,63 @@
-# 📘 RoT RAG Project — RAG Pipeline with FAISS + Gemini LLM + FastAPI + Cloud Run
+# 📘 RAG Study Assistant — FAISS + Gemini + FastAPI + Cloud Run
+**A document-based personal study assistant for students.**
 
-![Rag](assets/rag_header.png)
+This project allows a student to upload their **course lecture PDFs**, embed them using **FAISS**, and ask questions that are answered using **Google Gemini**, fully grounded in the course materials.
 
-Modern Large Language Models (LLMs) are powerful at generating text, but they rely only on the knowledge contained in their training data. This means their answers may be **outdated**, **incomplete**, or **incorrect**—especially in domains requiring specific and up-to-date information.
+The system is ideal for courses where students must study using lecture slides, notes, or textbook PDFs — such as **Cloud Computing, Distributed Systems, Machine Learning**, etc.
 
-**Retrieval-Augmented Generation (RAG)** solves this problem by combining an LLM with external knowledge sources. The model becomes grounded with real passages retrieved from documents, producing:
+![Rag Assistant](/assets/ragassistant.png)
 
-✔ More accurate answers  
-✔ More reliable reasoning  
-✔ More contextually relevant responses  
-✔ Document-based outputs  
 
----
 
-## 🚀 Project Overview
+## 🛠️ Features
 
-This project implements a full **RAG system** with:
-
-### 🔍 FAISS  
-Used for fast semantic vector search over PDF/TXT documents.
+### 🔍 Retrieval-Augmented Generation (RAG) 
+- Retrieves relevant chunks from uploaded course materials. 
+- Uses FAISS vector search for fast similarity lookup.
 
 ### 🤖 Google Gemini LLM  
-Generates structured English answers using retrieved context.
+- Generates structured, high-quality English answers. 
+- Includes improved prompting tuned for lecture/exam explanations.
 
-### ⚙️ FastAPI  
-Provides a clean, production-ready REST API.
+### 📝 Document-Based Q&A
+- Answers are only generated using your PDFs (slides, notes).
+- Works for any course — simply replace the documents.
 
-### 🐳 Docker  
-Fully containerized deployment.
+### 🌐 Web UI  
+- Clean, simple HTML frontend for asking questions.
+- Shows retrieved passages + relevance scores.
+Runs fully online via Cloud Run.
 
-### ☁️ Cloud Run  
-Deploy your RAG service serverlessly with Google Cloud.
+### ☁️ Cloud Run Deployment 
+- Backend downloads FAISS index & chunks from Google Cloud Storage at startup. 
+- No local files needed on server.
 
----
 
 ## 📁 Project Structure
 
-```
-rot-rag-project/
+```pgsql
+rag-study-assistant/
 │
-├── data/                       
-│   ├── chunks.json             
-│   ├── faiss_index.bin         
-│   ├── faiss_metadata.json     
-│   ├── user_manual.pdf         
-│   └── ...
+├── data/                  # Local document & index storage (dev only)
+│   ├── *.pdf
+│   ├── chunks.json
+│   ├── embeddings.npy
+│   ├── faiss_index.bin
+│   ├── faiss_metadata.json
 │
 ├── rag/
-│   ├── app.py                  
-│   ├── llm_wrapper.py          
-│   └── query_faiss.py          
+│   ├── app.py             # FastAPI backend + Cloud Run startup logic
+│   ├── llm_wrapper.py     # Prompting + Gemini API wrapper
+│   ├── query_faiss.py     # Vector search over FAISS index
+│   └── gcs_utils.py       # Download index from GCS
 │
 ├── src/
-│   ├── ingest.py               
-│   ├── embed_faiss.py          
-│   └── eval_rag.py             
+│   ├── ingest.py          # Chunk PDFs → chunks.json
+│   ├── embed_faiss.py     # Embed chunks → FAISS index
+│   └── eval_rag.py
+│
+├── frontend/
+│   └── index.html         # Web UI served via FastAPI `/web`
 │
 ├── Dockerfile
 ├── requirements.txt
@@ -62,30 +65,28 @@ rot-rag-project/
 └── .env
 ```
 
----
+## Requirements
 
-# 🔧 1. Requirements
+- Python 3.11+
+- Google Cloud Account
+- Gemini API Key
+- Cloud Run enabled
+- GCS bucket created
 
-- **Python 3.11+**
-- **Google Gemini API Key**
-- Optional:
-  - **Docker**
-  - **Google Cloud SDK**
+## Usage
 
----
-
-# 🔑 2. Create `.env`
+### 1. Create `.env`
 
 Create a `.env` file in the project root:
 
-```
-GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-GEMINI_MODEL_NAME=gemini-2.5-flash
+```ini
+GEMINI_API_KEY=YOUR_KEY
+GEMINI_MODEL_NAME=gemini-2.5-flash   # or another supported model
+GCS_BUCKET_NAME=rag-documents-bucket-xxx
 ```
 
----
 
-# 🧩 3. Setup Environment
+### 2. Setup Environment
 
 ```bash
 python -m venv .venv
@@ -95,19 +96,25 @@ source .venv/bin/activate      # macOS/Linux
 pip install -r requirements.txt
 ```
 
----
 
-# 📥 4. Add Documents
+### 3. Add Course Documents
 
-Place your `.pdf` or `.txt` files inside the `data/` directory:
-
-```
-data/my_manual.pdf
+Place your `.pdf` files into:
+```kotlin
+data/*.pdf
 ```
 
----
+For example:
+```bash
+data/lecture1.pdf
+data/lecture2.pdf
+data/chapter5.pdf
+```
 
-# 🧱 5. Ingest Documents
+ When switching courses, simply delete old PDFs and upload new ones.
+
+
+### 4. Ingest PDFs → Chunks
 
 ```bash
 python src/ingest.py
@@ -115,107 +122,150 @@ python src/ingest.py
 
 Generates:
 
-```
+```bash
 data/chunks.json
 ```
 
----
 
-# 🔍 6. Build FAISS Index
+### 5. Embed Chunks → FAISS Index
 
 ```bash
 python src/embed_faiss.py
 ```
 
-Outputs:
-
-```
-data/faiss_index.bin
-data/faiss_metadata.json
-```
-
----
-
-# 🤖 7. Test RAG Locally
+Generates & uploads to GCS:
 
 ```bash
-python rag/test_llm_query.py
+data/faiss_index.bin
+data/faiss_metadata.json
+data/chunks.json
+data/embeddings.npy
 ```
 
-What this does:
 
-1. Runs FAISS semantic search  
-2. Sends the top passages to Gemini  
-3. Produces a clear English answer  
-
----
-
-# 🌐 8. Start FastAPI Backend
+### 6. Run Backend Locally
 
 ```bash
 uvicorn rag.app:app --reload
 ```
 
-Then open:
+Endpoints:
 
-- Swagger UI → http://127.0.0.1:8000/docs  
-- Health check → http://127.0.0.1:8000/health  
+- Swagger → http://127.0.0.1:8000/docs 
+- Web UI → http://127.0.0.1:8000/web 
+- Health → http://127.0.0.1:8000/health
 
----
 
-# 🐳 9. Docker Usage
+### 7. Docker (Optional)
 
-## Build image
+#### Build image:
 
 ```bash
 docker build -t rag-app .
 ```
 
-## Run container
+#### Run container:
 
 ```bash
 docker run -p 8000:8000 --env-file .env rag-app
 ```
 
----
 
-# ☁️ 10. Deploy to Google Cloud Run (Optional)
+### 8. Deploy to Google Cloud Run
 
-## 10.1 Create Artifact Registry
-
-```bash
-gcloud artifacts repositories create rag-repo     --repository-format=docker     --location=europe-west1
-```
-
-## 10.2 Build & Push Docker Image
+#### 8.1 Build & Push Docker Image:
 
 ```bash
-gcloud builds submit     --tag europe-west1-docker.pkg.dev/rag-study-assistant/rag-repo/rag-app
+gcloud builds submit \
+  --tag europe-west1-docker.pkg.dev/YOUR_PROJECT_ID/rag-repo/rag-app
 ```
 
-## 10.3 Deploy to Cloud Run
+#### 8.2 Deploy to Cloud Run:
 
 ```bash
-gcloud run deploy rag-service     --image europe-west1-docker.pkg.dev/rag-study-assistant/rag-repo/rag-app     --platform managed     --region europe-west1     --allow-unauthenticated     --set-env-vars GEMINI_API_KEY=YOUR_KEY,GEMINI_MODEL_NAME=gemini-2.5-flash
+gcloud run deploy rag-service \
+  --image europe-west1-docker.pkg.dev/YOUR_PROJECT_ID/rag-repo/rag-app \
+  --platform managed \
+  --region europe-west1 \
+  --allow-unauthenticated \
+  --set-env-vars GEMINI_API_KEY=YOUR_KEY,GEMINI_MODEL_NAME=gemini-2.0-flash,GCS_BUCKET_NAME=rag-documents-bucket-xxx
 ```
 
-Cloud Run will output a public URL such as:
+Cloud Run will output your service URL:
 
+```bash
+https://rag-service-xxxx-ew.a.run.app
 ```
-https://rag-service-xxxxx-europe-west1.run.app
+
+You can now open:
+
+```bash
+https://rag-service-xxxx-ew.a.run.app/web
 ```
 
----
 
-# 📌 Notes
+## Architecture - How the System Works
+>#### 1. Student uploads PDFs (locally during ingestion)
+>>PDFs → text → chunks.
 
-- All answers are generated **in English**.
-- Gemini is used instead of a local HuggingFace LLM.
-- FAISS index is stored inside the container, requiring no external DB.
-- Chunking + embedding happen **before** deployment.
+>#### 2. Embeddings generated
+>>Chunks → embeddings → FAISS index.
 
----
+>#### 3. Index uploaded to GCS
+>>Cloud Run always loads latest index.
 
-# 📄 License
+>#### 4. FastAPI backend
+>>Handles `/ask`:
+>>>- retrieves top-k chunks
+>>>- sends them to Gemini
+>>>- returns structured English answer
+
+>#### 5. Frontend UI
+>>Shows:
+>>>- Generated answer
+>>>- Retrieval time
+>>>- Passage list with scores
+
+### Number of Passages (top-k)
+
+In the web interface, you can choose how many document passages will be retrieved and used as context for Gemini.
+
+- **top-k = 3** → fast, short answers  
+- **top-k = 5** → recommended (balanced accuracy + speed)  
+- **top-k = 7–10** → more detailed, lecture-style answers
+
+Higher values include more slides but may increase response time.
+
+
+![Rag Question & Answer](/assets/mapreduceoutput.png)
+![Rag Chunks](/assets/mapreducechunks.png)
+
+
+## Ideal Use Case
+This system is perfect for a student who wants:
+
+- A personal AI assistant for one specific course
+- Answers only from their lecture materials
+- Quick re-indexing when switching courses
+- Cloud deployment with zero local dependencies
+
+Examples:
+
+- "How does Map-Reduce work step-by-step?"
+- "Summarize Lecture 3."
+- "What is virtualization in cloud computing?"
+- "What are AWS IAM roles?"
+
+
+## Notes
+- All answers are generated in English.
+
+- Answers are grounded in retrieved PDFs; if unrelated, model says so.
+
+- You can expand the frontend to allow file upload to GCS (future feature).
+
+- Works with any course: you control the documents.
+
+## License
 
 Distributed under the **MIT License**.
