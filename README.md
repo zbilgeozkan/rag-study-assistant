@@ -8,7 +8,6 @@ The system is ideal for courses where students must study using lecture slides, 
 ![Rag Assistant](/assets/ragassistant.png)
 
 
-
 ## 🛠️ Features
 
 ### 🔍 Retrieval-Augmented Generation (RAG) 
